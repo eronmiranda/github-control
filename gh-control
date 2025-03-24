@@ -7,6 +7,9 @@ set -o pipefail
 ME=$(basename "$0")
 LOG_ME=${ME%.sh}
 
+# shellcheck disable=SC1091
+. ".github_token"
+
 log() {
   >&2 echo "${LOG_ME}: $(gdate --utc +%H:%M:%SZ): $*"
 }
