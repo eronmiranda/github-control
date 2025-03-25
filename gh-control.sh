@@ -29,10 +29,19 @@ help() {
   cat <<EOF
 usage: ${ME} COMMAND [OPTIONS]
 
+Description:
+  This tool interacts with the Github API to automate tasks on Github.
+
+Required:
+  It requires a Github access token for authentication. 
+  Environment must contain:
+
+    GH_ACCESS_TOKEN="Insert your token here"
+
 where COMMAND is one of
 
   help
-    Print this message
+    Show this help message and exit.
 
   get {PATH|URL}
     Call the API at PATH (or URL) using HTTP GET request. Use only 
