@@ -28,7 +28,7 @@ chmod 600 .env
 
 This will restrict access to the file to only your user account.
 
-### 3. Add .env to .gitignore
+### 3. Add `.env` to `.gitignore`
 
 To ensure that the `.env` file is not tracked by Git and doesn't get committed, add it to your `.gitignore` file:
 
