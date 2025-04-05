@@ -19,12 +19,6 @@ die() {
   exit 1
 }
 
-options_usage='
-    where:
-      --user USER   List information of the specified user.
-      --auth-user   List information of the authenticated user.
-'
-
 help() {
   cat <<EOF
 usage: ${ME} COMMAND [OPTIONS]
