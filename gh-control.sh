@@ -32,43 +32,41 @@ usage: ${ME} COMMAND [OPTIONS]
 Description:
   This tool interacts with the Github API to automate tasks on Github.
 
-Required:
-  It requires a Github access token for authentication. 
+Authentication:
+  Requires a Github access token for authentication. 
   Your environment must contain:
-
     GH_ACCESS_TOKEN="your_token_here"
 
-where COMMAND is one of
+Commands:
+  Information Commands:
+    help                            Show this help message and exit
+    get {PATH|URL}                  Make HTTP GET request to API endpoint (debug only)
+    get-repo OWNER/REPO             Get details of a specific repository
 
-  help
-    Show this help message and exit.
+  Repository Listing:
+    get-repos         {OPTIONS}     List all repositories
+    get-public-repos  {OPTIONS}     List public repositories
+    get-private-repos {OPTIONS}     List private repositories
+    get-archived-repos {OPTIONS}    List archived repositories
 
-  get {PATH|URL}
-    Call the API at PATH (or URL) using HTTP GET request. Use only 
-    for debugging and experimentation purposes.
+  Repository Visibility:
+    make-repos-private REPO...      Make specified repositories private
+    make-repos-public  REPO...      Make specified repositories public
 
-  get-repo OWNER/REPO
-    Get the details of a single repository named REPO and owned by
-    OWNER. OWNER can be either an organization or a user.
+Options:
+  For repository listing commands:
+    --user USER                     List repositories for the specified user
+    --auth-user                     List repositories for the authenticated user
 
-  get-repos {--user USER | --auth-user}
-    List repositories of the specified option.${options_usage}
+Examples:
+  ${ME} get-repo octocat/Hello-World
+  ${ME} get-repos --user octocat
+  ${ME} get-private-repos --auth-user
+  ${ME} make-repos-private myrepo1 myrepo2
 
-  get-public-repos {--user USER | --auth-user}
-    List public repositories of the specified option.${options_usage}
-
-  get-private-repos {--user USER | --auth-user}
-    List private repositories of the specified option.${options_usage}
-
-  get-archived-repos {--user USER | --auth-user}
-    List archived repositories of the specified option.${options_usage}
-
-  make-repos-private REPO [REPO...]
-    Make one or more specified repositories private.
-
-  make-repos-public REPO [REPO...]
-    Make one or more specified repositories public.
-
+Notes:
+  - All commands require authentication via GH_ACCESS_TOKEN
+  - Repository names for visibility changes must belong to authenticated user
 EOF
 }
 
