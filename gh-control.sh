@@ -34,9 +34,9 @@ Description:
 
 Required:
   It requires a Github access token for authentication. 
-  Environment must contain:
+  Your environment must contain:
 
-    GH_ACCESS_TOKEN="Insert your token here"
+    GH_ACCESS_TOKEN="your_token_here"
 
 where COMMAND is one of
 
@@ -63,11 +63,11 @@ where COMMAND is one of
   get-archived-repos {--user USER | --auth-user}
     List archived repositories of the specified option.${options_usage}
 
-  make-repo-private
-    Make one or more repositories public.
+  make-repos-private REPO [REPO...]
+    Make one or more specified repositories private.
 
-  make-repo-private
-    Make one or more repositories private.
+  make-repos-public REPO [REPO...]
+    Make one or more specified repositories public.
 
 EOF
 }
@@ -280,13 +280,29 @@ case "$COMMAND" in
     cmd_get_repos "$@" | jq '. | select(.archived == true)'
     ;;
   make-repos-private)
+    auth_user=$(get_gh 'user' | jq -r '.login')
+    if [ -z "$auth_user" ]; then
+      die "failed to get authenticated user"
+    fi
+    if [ "$#" -eq 0 ]; then
+      die "usage: ${ME} ${COMMAND} REPO [REPO...]"
+    fi
     for r in "$@"; do
-      patch_gh "repos/${r}" '{"private": true}' | jq .
+      log "make-repos-private: ${r}"
+      patch_gh "repos/${auth_user}/${r}" '{"private": true}' | jq .
     done
     ;;
   make-repos-public)
+    auth_user=$(get_gh 'user' | jq -r '.login')
+    if [ -z "$auth_user" ]; then
+      die "failed to get authenticated user"
+    fi
+    if [ "$#" -eq 0 ]; then
+      die "usage: ${ME} ${COMMAND} REPO [REPO...]"
+    fi
     for r in "$@"; do
-      patch_gh "repos/${r}" '{"private": false}' | jq .
+      log "make-repos-public: ${r}"
+      patch_gh "repos/${auth_user}/${r}" '{"private": false}' | jq .
     done
     ;;
   *)

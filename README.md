@@ -2,6 +2,13 @@
 
 ## WIP
 
+## Prerequisites
+
+ You must have:
+
+- `jq` installed
+- Generated a GitHub token that has the right permissions
+
 ## Setting up Environment Variables Locally
 
 This project requires an environment variable to be set on your local machine. Follow the instructions below to securely add and use the environment variable.
