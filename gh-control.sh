@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# gh-control - GitHub management tool
+# Version: 1.0.0
+# Author: Eronielle Miranda
 
 set -o errexit
 set -o nounset
