@@ -252,9 +252,19 @@ cmd_get_repos() {
   echo "${repos}" | jq '.[]'
 }
 
+check_rate_limit() {
+  local rate_limit
+  rate_limit=$(get_gh "rate_limit" | jq .resources.core.remaining)
+  if [ "$rate_limit" -lt 1 ]; then
+    die "GitHub API rate limit exceeded. Please try again later."
+  fi
+}
+
 [ -n "${1:-}" ] || die "show all commands using: ${ME} help"
 COMMAND="$1"
 shift
+
+check_rate_limit
 
 case "$COMMAND" in
   help)
@@ -267,6 +277,7 @@ case "$COMMAND" in
     ;;
   get-repo)
     { [ -n "${1:-}" ]; } || die "usage: ${ME} ${COMMAND} OWNER/REPO"
+    validate_repo_name "$(basename "${1}")"
     log "get-repo: getting '${1}'"
     get_gh "repos/${1}" | jq .
     ;;
