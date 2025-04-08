@@ -233,6 +233,13 @@ set_url_path() {
   esac
 }
 
+validate_repo_name() {
+  local repo="$1"
+  if [[ ! "$repo" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    die "Invalid repository name: $repo"
+  fi
+}
+
 cmd_get_repos() {
   set_url_path "$@"
   url_path="$URL_PATH"
@@ -284,6 +291,7 @@ case "$COMMAND" in
       die "usage: ${ME} ${COMMAND} REPO [REPO...]"
     fi
     for r in "$@"; do
+      validate_repo_name "$r"
       log "make-repos-private: ${r}"
       patch_gh "repos/${auth_user}/${r}" '{"private": true}' | jq .
     done
@@ -297,6 +305,7 @@ case "$COMMAND" in
       die "usage: ${ME} ${COMMAND} REPO [REPO...]"
     fi
     for r in "$@"; do
+      validate_repo_name "$r"
       log "make-repos-public: ${r}"
       patch_gh "repos/${auth_user}/${r}" '{"private": false}' | jq .
     done
