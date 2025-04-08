@@ -218,6 +218,9 @@ delete_gh() {
 set_url_path() {
   local option=${1:-}
   local path_parameter=${2:-}
+
+[ -n "$option" ] || die "No option provided"
+
   case $option in
       --user)
         [ -n "$path_parameter" ] || die "usage: ${ME} ${COMMAND} --user USER"
