@@ -117,3 +117,6 @@ The script includes comprehensive error handling:
 - Keep your `.github_token` file secure with appropriate permissions
 - Regularly rotate your GitHub Personal Access Token
 - Use the minimum required permissions for your token
+
+---
+Built with ☕️ by [@eronmiranda](https://github.com/eronmiranda)
