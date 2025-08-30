@@ -1,0 +1,13 @@
+# Example configuration file for gh-control
+# Copy this to .env and customize as needed
+
+# GitHub Personal Access Token
+# GH_ACCESS_TOKEN="your_token_here"
+
+# Global options
+# DRY_RUN=false
+# FORCE=false
+# KEEP_TMP=n
+
+# API settings
+# GH_HOST=api.github.com
