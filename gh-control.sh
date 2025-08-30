@@ -11,6 +11,9 @@ set -o pipefail
 ME=$(basename "$0")
 LOG_ME=${ME%.sh}
 
+DRY_RUN=${DRY_RUN:-false}
+FORCE=${FORCE:-false}
+
 # shellcheck disable=SC1091
 . ".github_token"
 
@@ -55,6 +58,10 @@ Options:
   For repository listing commands:
     --user USER                     List repositories for the specified user
     --auth-user                     List repositories for the authenticated user
+
+  Global options (set as environment variables):
+    DRY_RUN=true                    Show what would be done without making changes
+    FORCE=true                      Skip confirmation prompts for destructive operations
 
 Examples:
   ${ME} get-repo octocat/Hello-World
@@ -192,12 +199,10 @@ get_gh() {
       { body: (.[1] | . as $i | try fromjson catch $i) }
       ' > "${tmp}/${page}.stdout.json"
     
-    # Check for curl errors
     if [ ! -s "${tmp}/${page}.stdout.json" ]; then
       die "Network error: Failed to connect to GitHub API"
     fi
     
-    # Check API response status
     check_api_response "${tmp}/${page}.stdout.json"
     
     jq .body "${tmp}/${page}.stdout.json"
@@ -342,11 +347,12 @@ set_url_path() {
   local option=${1:-}
   local path_parameter=${2:-}
 
-[ -n "$option" ] || die "No option provided"
+  [ -n "$option" ] || die "No option provided"
 
   case $option in
       --user)
         [ -n "$path_parameter" ] || die "usage: ${ME} ${COMMAND} --user USER"
+        validate_username "$path_parameter"
         URL_PATH="users/${path_parameter}/repos"
         ;;
       --auth-user)
@@ -354,15 +360,145 @@ set_url_path() {
         ;;
       *)
         help
-        die "Invalid options was provided: $option"
+        die "Invalid option provided: $option"
         ;;
   esac
 }
 
 validate_repo_name() {
   local repo="$1"
+  
+  # GitHub repository names can contain alphanumeric characters, hyphens, underscores, and periods
+  # They cannot start or end with hyphens, and cannot contain consecutive hyphens
+  if [[ -z "$repo" ]]; then
+    die "Repository name cannot be empty"
+  fi
+  
+  if [[ ${#repo} -gt 100 ]]; then
+    die "Repository name too long (max 100 characters): $repo"
+  fi
+  
   if [[ ! "$repo" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    die "Invalid repository name: $repo"
+    die "Invalid repository name: $repo (only alphanumeric, dots, hyphens, and underscores allowed)"
+  fi
+  
+  if [[ "$repo" =~ ^[-.]|[-.]$ ]]; then
+    die "Invalid repository name: $repo (cannot start or end with hyphens or dots)"
+  fi
+  
+  if [[ "$repo" =~ -- ]]; then
+    die "Invalid repository name: $repo (cannot contain consecutive hyphens)"
+  fi
+}
+
+validate_owner_repo() {
+  local owner_repo="$1"
+  
+  if [[ -z "$owner_repo" ]]; then
+    die "Owner/repository format required (e.g., 'owner/repo')"
+  fi
+  
+  if [[ ! "$owner_repo" =~ ^[^/]+/[^/]+$ ]]; then
+    die "Invalid format: $owner_repo (expected 'owner/repo')"
+  fi
+  
+  local owner="${owner_repo%/*}"
+  local repo="${owner_repo#*/}"
+  
+  validate_username "$owner"
+  validate_repo_name "$repo"
+}
+
+validate_username() {
+  local username="$1"
+  
+  if [[ -z "$username" ]]; then
+    die "Username cannot be empty"
+  fi
+  
+  if [[ ${#username} -gt 39 ]]; then
+    die "Username too long (max 39 characters): $username"
+  fi
+  
+  if [[ ! "$username" =~ ^[A-Za-z0-9-]+$ ]]; then
+    die "Invalid username: $username (only alphanumeric and hyphens allowed)"
+  fi
+  
+  if [[ "$username" =~ ^-|-$ ]]; then
+    die "Invalid username: $username (cannot start or end with hyphens)"
+  fi
+  
+  if [[ "$username" =~ -- ]]; then
+    die "Invalid username: $username (cannot contain consecutive hyphens)"
+  fi
+}
+
+validate_path_parameter() {
+  local path="$1"
+  
+  if [[ -z "$path" ]]; then
+    die "Path parameter cannot be empty"
+  fi
+  
+  # remove any potentially dangerous characters
+  if [[ "$path" =~ [[:space:]\;\&\|\`\$\(\)] ]]; then
+    die "Invalid characters in path: $path"
+  fi
+}
+
+confirm_action() {
+  local action="$1"
+  local repos=("${@:2}")
+  
+  if [[ "$FORCE" == "true" ]]; then
+    return 0
+  fi
+  
+  echo "WARNING: You are about to $action the following repositories:"
+  printf "  - %s\n" "${repos[@]}"
+  echo
+  read -p "Are you sure you want to continue? (y/N): " -r
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log "Operation cancelled by user"
+    exit 0
+  fi
+}
+
+dry_run_message() {
+  local action="$1"
+  local repo="$2"
+  
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "[DRY RUN] Would $action repository: $repo"
+    return 0
+  fi
+  return 1
+}
+
+check_repo_exists() {
+  local owner="$1"
+  local repo="$2"
+  
+  log "Checking if repository exists: ${owner}/${repo}"
+  if ! get_gh "repos/${owner}/${repo}" >/dev/null 2>&1; then
+    die "Repository not found: ${owner}/${repo}"
+  fi
+}
+
+validate_repo_ownership() {
+  local auth_user="$1"
+  local repo="$2"
+  
+  log "Validating ownership of repository: ${auth_user}/${repo}"
+  local repo_info
+  if ! repo_info=$(get_gh "repos/${auth_user}/${repo}" 2>/dev/null); then
+    die "Cannot access repository: ${auth_user}/${repo}. Check if it exists and you have permissions."
+  fi
+  
+  local repo_owner
+  repo_owner=$(echo "$repo_info" | jq -r '.owner.login')
+  if [[ "$repo_owner" != "$auth_user" ]]; then
+    die "You don't own repository: ${auth_user}/${repo} (owned by: $repo_owner)"
   fi
 }
 
@@ -396,6 +532,14 @@ check_rate_limit() {
 COMMAND="$1"
 shift
 
+if [[ "$DRY_RUN" == "true" ]]; then
+  log "Running in DRY RUN mode - no changes will be made"
+fi
+
+if [[ "$FORCE" == "true" ]]; then
+  log "Running in FORCE mode - skipping confirmation prompts"
+fi
+
 check_rate_limit
 
 case "$COMMAND" in
@@ -405,11 +549,12 @@ case "$COMMAND" in
     ;;
   get)
     [ -n "${1:-}" ] || die "usage: ${ME} ${COMMAND} PATH"
+    validate_path_parameter "$1"
     get_gh "$1" | jq .
     ;;
   get-repo)
     { [ -n "${1:-}" ]; } || die "usage: ${ME} ${COMMAND} OWNER/REPO"
-    validate_repo_name "$(basename "${1}")"
+    validate_owner_repo "$1"
     log "get-repo: getting '${1}'"
     get_gh "repos/${1}" | jq .
     ;;
@@ -426,44 +571,90 @@ case "$COMMAND" in
     cmd_get_repos "$@" | jq '. | select(.archived == true)'
     ;;
   make-repos-private)
+    if [ "$#" -eq 0 ]; then
+      die "usage: ${ME} ${COMMAND} REPO [REPO...]"
+    fi
+    
+    for r in "$@"; do
+      validate_repo_name "$r"
+    done
+    
     log "Getting authenticated user information..."
     auth_user=$(get_gh 'user' 2>/dev/null | jq -r '.login')
     if [ -z "$auth_user" ] || [ "$auth_user" = "null" ]; then
       die "Failed to get authenticated user. Check your GitHub token."
     fi
-    if [ "$#" -eq 0 ]; then
-      die "usage: ${ME} ${COMMAND} REPO [REPO...]"
-    fi
     log "Authenticated as: $auth_user"
+    
     for r in "$@"; do
-      validate_repo_name "$r"
+      validate_repo_ownership "$auth_user" "$r"
+    done
+    
+    confirm_action "make private" "$@"
+    
+    success_count=0
+    total_count=$#
+    
+    for r in "$@"; do
+      if dry_run_message "make private" "${auth_user}/${r}"; then
+        continue
+      fi
+      
       log "Making repository private: ${auth_user}/${r}"
-      if ! patch_gh "repos/${auth_user}/${r}" '{"private": true}' | jq .; then
-        log "Failed to make ${r} private, continuing with next repository..."
-      else
+      if patch_gh "repos/${auth_user}/${r}" '{"private": true}' >/dev/null 2>&1; then
         log "Successfully made ${r} private"
+        ((success_count++))
+      else
+        log "Failed to make ${r} private, continuing with next repository..."
       fi
     done
+    
+    if [[ "$DRY_RUN" != "true" ]]; then
+      log "Completed: ${success_count}/${total_count} repositories made private"
+    fi
     ;;
   make-repos-public)
+    if [ "$#" -eq 0 ]; then
+      die "usage: ${ME} ${COMMAND} REPO [REPO...]"
+    fi
+    
+    for r in "$@"; do
+      validate_repo_name "$r"
+    done
+    
     log "Getting authenticated user information..."
     auth_user=$(get_gh 'user' 2>/dev/null | jq -r '.login')
     if [ -z "$auth_user" ] || [ "$auth_user" = "null" ]; then
       die "Failed to get authenticated user. Check your GitHub token."
     fi
-    if [ "$#" -eq 0 ]; then
-      die "usage: ${ME} ${COMMAND} REPO [REPO...]"
-    fi
     log "Authenticated as: $auth_user"
+    
     for r in "$@"; do
-      validate_repo_name "$r"
+      validate_repo_ownership "$auth_user" "$r"
+    done
+    
+    confirm_action "make public" "$@"
+    
+    success_count=0
+    total_count=$#
+    
+    for r in "$@"; do
+      if dry_run_message "make public" "${auth_user}/${r}"; then
+        continue
+      fi
+      
       log "Making repository public: ${auth_user}/${r}"
-      if ! patch_gh "repos/${auth_user}/${r}" '{"private": false}' | jq .; then
-        log "Failed to make ${r} public, continuing with next repository..."
-      else
+      if patch_gh "repos/${auth_user}/${r}" '{"private": false}' >/dev/null 2>&1; then
         log "Successfully made ${r} public"
+        ((success_count++))
+      else
+        log "Failed to make ${r} public, continuing with next repository..."
       fi
     done
+    
+    if [[ "$DRY_RUN" != "true" ]]; then
+      log "Completed: ${success_count}/${total_count} repositories made public"
+    fi
     ;;
   *)
     die "${COMMAND}: no such command"
